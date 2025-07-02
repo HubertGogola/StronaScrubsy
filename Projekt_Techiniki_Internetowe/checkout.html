@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <title>Finalizacja – Mediva Store</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top shadow-sm bg-white">
+  <div class="container">
+    <a class="navbar-brand fw-bold" href="index.html">Mediva Store</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navmenu">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navmenu">
+      <ul class="navbar-nav ms-auto">
+        <li class="nav-item"><a class="nav-link" href="index.html">Start</a></li>
+        <li class="nav-item"><a class="nav-link" href="scrubsy.html">Scrubsy</a></li>
+        <li class="nav-item"><a class="nav-link" href="dlaczego.html">Dlaczego my?</a></li>
+        <li class="nav-item"><a class="nav-link" href="opinie.html">Opinie</a></li>
+        <li class="nav-item position-relative group-koszyk">
+          <a class="nav-link position-relative" href="cart.html">
+            Koszyk
+            <span id="cart-count" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">0</span>
+          </a>
+          <div id="cart-preview" class="cart-preview shadow-sm">
+            <p class="mb-1"><strong>Twój koszyk</strong></p>
+            <p class="mb-0">Brak produktów</p>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+
+  <div class="container py-5">
+    <div class="row g-4">
+      <!-- Formularz -->
+      <div class="col-lg-7">
+        <div class="card p-4 shadow-sm card-hover">
+          <h2 class="mb-4">Finalizacja zamówienia</h2>
+          <form onsubmit="simulateBlikPayment(event)">
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label for="name" class="form-label">Imię i nazwisko</label>
+                <input type="text" class="form-control" id="name" placeholder="Jan Kowalski" required>
+              </div>
+              <div class="col-md-6">
+                <label for="email" class="form-label">E-mail</label>
+                <input type="email" class="form-control" id="email" placeholder="jan@example.com" required>
+              </div>
+              <div class="col-12">
+                <label for="address" class="form-label">Adres dostawy / Paczkomat</label>
+                <input type="text" class="form-control" id="address" placeholder="ul. Przykładowa 12/4" required>
+              </div>
+              <div class="col-md-6">
+                <label for="city" class="form-label">Miasto</label>
+                <input type="text" class="form-control" id="city" required>
+              </div>
+              <div class="col-md-6">
+                <label for="postal" class="form-label">Kod pocztowy</label>
+                <input type="text" class="form-control" id="postal" placeholder="00-000" pattern="\d{2}-\d{3}" required>
+              </div>
+            </div>
+
+            <div class="mt-4">
+              <h5>Wybierz paczkomat (kliknij na mapie)</h5>
+              <div id="mapa-paczkomatow"></div>
+              <div id="selected-locker-info" class="alert alert-info mt-3 d-none"></div>
+            </div>
+
+            <div class="mt-4">
+              <div class="d-flex align-items-center mb-2">
+                <strong class="me-2">Forma płatności:</strong>
+                <img src="img/blik1.svg" alt="BLIK" height="40">
+              </div>
+              <input type="text" id="blik-code" class="form-control mt-2" placeholder="Wprowadź 6-cyfrowy kod BLIK" pattern="\d{6}" required>
+            </div>
+            
+            <button type="submit" class="btn btn-success w-100 mt-4 py-2 fw-bold fs-5">
+              <i class="bi bi-check2-circle me-2"></i>Symuluj płatność i zamów
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <!-- Podsumowanie zamówienia -->
+      <div class="col-lg-5">
+        <div class="card p-4 bg-white shadow-sm card-hover">
+          <h4 class="mb-4">
+            <i class="bi bi-receipt-cutoff me-2"></i>Podsumowanie zamówienia
+          </h4>
+          <ul id="checkout-summary" class="list-group mb-3"></ul>
+          <div id="delivery-info"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="text-center py-4 bg-light text-muted border-top mt-5">
+    <p class="mb-1">&copy; 2025 Mediva Store</p>
+    <small>Bezpieczne zakupy – Szyfrowane połączenie SSL</small>
+  </footer>
+
+  <!-- JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const summaryEl = document.getElementById('checkout-summary');
+      const deliveryInfo = document.getElementById('delivery-info');
+      const cart = JSON.parse(localStorage.getItem('cart')) || [];
+      let total = 0;
+
+      if (cart.length === 0) {
+        summaryEl.innerHTML = '<li class="list-group-item text-center text-muted">Koszyk jest pusty.</li>';
+        return;
+      }
+
+      summaryEl.innerHTML = cart.map(item => {
+        const itemTotal = item.price * item.quantity;
+        total += itemTotal;
+        return `
+          <li class="list-group-item d-flex justify-content-between lh-sm">
+            <div>
+              <h6 class="my-0">${item.name}</h6>
+              <small class="text-muted">Rozmiar: ${item.size}, Ilość: ${item.quantity}</small>
+            </div>
+            <span class="text-muted">${itemTotal.toFixed(2)} zł</span>
+          </li>
+        `;
+      }).join('');
+
+      summaryEl.innerHTML += `
+        <li class="list-group-item d-flex justify-content-between bg-light">
+          <strong>Razem</strong>
+          <strong>${total.toFixed(2)} zł</strong>
+        </li>
+      `;
+
+      if (total >= 100) {
+        deliveryInfo.innerHTML = '<p class="text-success small mt-2">Dostawa darmowa!</p>';
+      } else {
+        deliveryInfo.innerHTML = '<p class="text-muted small mt-2">Dostawa darmowa przy zamówieniach powyżej 100 zł.</p>';
+      }
+    });
+
+    function simulateBlikPayment(event) {
+      event.preventDefault();
+  
+      const address = document.getElementById('address').value.trim();
+      const blikCode = document.getElementById('blik-code').value.trim();
+  
+      if (!address || !address.startsWith("Paczkomat")) {
+          alert('Wybierz paczkomat z mapy, klikając "Wybierz ten paczkomat".');
+          return;
+      }
+  
+      if (!/^\d{6}$/.test(blikCode)) {
+          alert('Wprowadź poprawny 6-cyfrowy kod BLIK.');
+          return;
+      }
+  
+      const button = event.target.querySelector('button[type="submit"]');
+      button.disabled = true;
+      button.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Przetwarzanie...';
+  
+      setTimeout(() => {
+          alert('Płatność BLIK zakończona powodzeniem!\nDziękujemy za złożenie zamówienia.');
+  
+          // Przekierowanie na stronę podziękowań
+          window.location.href = 'podziekowania.html'; // Przekierowanie do strony z podziękowaniami
+  
+          button.disabled = false;
+          button.innerHTML = '<i class="bi bi-check2-circle me-2"></i>Symuluj płatność i zamów';
+          event.target.reset();
+          localStorage.removeItem('cart');
+          document.getElementById('checkout-summary').innerHTML = '<li class="list-group-item text-center text-muted">Koszyk jest pusty.</li>';
+          document.getElementById('delivery-info').innerHTML = '';
+          document.getElementById('selected-locker-info').classList.add('d-none');
+      }, 2000);
+  }
+
+    // Mapa paczkomatów
+    const mapa = L.map('mapa-paczkomatow').setView([52.2, 19.1], 6); // Polska środek
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(mapa);
+
+    const paczkomaty = [
+      { name: "WAW01A", address: "ul. Domaniewska 37, Warszawa", coords: [52.1803, 20.9989] },
+      { name: "KRK02B", address: "ul. Mogilska 15, Kraków", coords: [50.066, 19.960] },
+      { name: "GD01C", address: "ul. Grunwaldzka 25, Gdańsk", coords: [54.370, 18.630] },
+      { name: "POZ03D", address: "ul. Głogowska 16, Poznań", coords: [52.400, 16.920] },
+      { name: "WRO04E", address: "ul. Legnicka 60, Wrocław", coords: [51.110, 17.020] },
+      { name: "SZC05F", address: "ul. Krzywoustego 12, Szczecin", coords: [53.430, 14.550] },
+      { name: "LUB06G", address: "ul. Lipowa 5, Lublin", coords: [51.250, 22.570] },
+      { name: "KAT07H", address: "ul. Chorzowska 107, Katowice", coords: [50.270, 19.010] },
+      { name: "BIA08I", address: "ul. Sienkiewicza 22, Białystok", coords: [53.130, 23.150] },
+      { name: "RZE09J", address: "ul. Rejtana 4, Rzeszów", coords: [50.040, 22.000] }
+    ];
+
+    paczkomaty.forEach(p => {
+      const fullAddress = `Paczkomat ${p.name}, ${p.address}`;
+      L.marker(p.coords)
+        .addTo(mapa)
+        .bindPopup(`<strong>Paczkomat ${p.name}</strong><br>${p.address}<br><button class="btn btn-sm btn-primary mt-2" onclick="wybierzPaczkomat('${fullAddress}')">Wybierz ten paczkomat</button>`);
+    });
+
+    function wybierzPaczkomat(fullAddress) {
+      document.getElementById('address').value = fullAddress;
+      const lockerInfo = document.getElementById('selected-locker-info');
+      lockerInfo.textContent = "Wybrany paczkomat: " + fullAddress;
+      lockerInfo.classList.remove('d-none');
+    }
+        // Aktualizacja licznika koszyka
+  document.addEventListener('DOMContentLoaded', () => {
+    const cart = JSON.parse(localStorage.getItem('cart')) || [];
+    const countEl = document.getElementById('cart-count');
+
+    const totalItems = cart.reduce((sum, item) => sum + parseInt(item.quantity || 0), 0);
+    if (totalItems > 0) {
+      countEl.textContent = totalItems;
+      countEl.style.display = 'inline-block';
+    } else {
+      countEl.style.display = 'none';
+    }
+  });
+  </script>
+  <script src="js/script.js"></script>
+</body>
+</html>
